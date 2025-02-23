@@ -83,12 +83,31 @@ impl eBpfProg {
     pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
+
     pub(crate) fn add(&mut self, insn: eBpfInsn) {
         self.0.push(insn);
     }
 
+    pub(crate) fn add_multi(&mut self, insns: &[eBpfInsn]) {
+        self.0.extend_from_slice(insns);
+    }
+
+    pub(crate) fn insert(&mut self, insn: eBpfInsn, offset: usize) {
+        self.0.insert(offset, insn);
+    }
+
     pub(crate) fn to_bytes(&self) -> Vec<u8> {
         self.0.iter().flat_map(|insn| insn.to_vec()).collect()
+    }
+
+    pub(crate) fn append_prog(&mut self, prog: &eBpfProg) {
+        self.add_multi(&prog.0);
+    }
+
+    pub(crate) fn get_raw_insn_mut(&mut self, pos: usize) -> Result<&mut eBpfInsn> {
+        self.0
+            .get_mut(pos)
+            .ok_or_else(|| anyhow!("Error retrieving ebpf jmp instruction at {pos}"))
     }
 
     #[cfg(feature = "debug")]
@@ -113,7 +132,7 @@ impl eBpfProg {
     // Only intended for early exit.
     fn exit_if_reg_imm(&mut self, reg: BpfReg, val: i32, eq: bool) {
         let j_type = match eq {
-            true => eBpfJmpOpExt::Ne,
+            true => eBpfJmpOpExt::eBpf(eBpfJmpOp::Ne),
             false => eBpfJmpOpExt::Bpf(BpfJmpOp::Eq),
         };
 
@@ -132,11 +151,11 @@ impl eBpfProg {
         self.add(eBpfInsn::exit());
     }
 
-    fn exit_retval_eq(&mut self, rval: i32) {
+    pub(crate) fn exit_retval_eq(&mut self, rval: i32) {
         self.exit_if_reg_imm(BpfReg::A, rval, true);
     }
 
-    fn exit_retval_neq(&mut self, rval: i32) {
+    pub(crate) fn exit_retval_neq(&mut self, rval: i32) {
         self.exit_if_reg_imm(BpfReg::A, rval, false);
     }
 
